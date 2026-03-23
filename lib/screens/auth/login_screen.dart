@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../services/auth_service.dart';
 import '../../theme.dart';
 import '../../widgets/common_widgets.dart';
@@ -12,24 +13,36 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _correoCtrl   = TextEditingController();
-  final _passCtrl     = TextEditingController();
-  bool _loading       = false;
+  final _correoCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  bool _loading = false;
   String? _error;
-  bool _showPass      = false;
+  bool _showPass = false;
 
   @override
-  void dispose() { _correoCtrl.dispose(); _passCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _correoCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _doLogin() async {
     if (_correoCtrl.text.trim().isEmpty || _passCtrl.text.isEmpty) {
       setState(() => _error = 'Completa todos los campos.');
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       await AuthService.login(
           correo: _correoCtrl.text.trim(), password: _passCtrl.text);
+
+      // ── Subir token FCM al backend después del login ──────────────
+      await _uploadFcmToken();
+      // ─────────────────────────────────────────────────────────────
+
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const ChatListScreen()));
@@ -37,6 +50,29 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Obtiene el FCM token del dispositivo y lo envía al backend.
+  /// Si falla, lo ignoramos silenciosamente (no bloquea el login).
+  Future<void> _uploadFcmToken() async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+
+      // Pide permiso (necesario en iOS; en Android es automático)
+      await messaging.requestPermission();
+
+      final token = await messaging.getToken();
+      if (token == null) return;
+
+      await AuthService.updateFirebaseToken(token);
+
+      // Si el token se renueva en el futuro, lo re-enviamos automáticamente
+      messaging.onTokenRefresh.listen((newToken) {
+        AuthService.updateFirebaseToken(newToken);
+      });
+    } catch (_) {
+      // No interrumpir el flujo de login si FCM falla
     }
   }
 
@@ -56,16 +92,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: kCard,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
-                    BoxShadow(color: kAccent.withValues(alpha: 0.10),
-                        blurRadius: 40, offset: const Offset(0, 16))
+                    BoxShadow(
+                        color: kAccent.withValues(alpha: 0.10),
+                        blurRadius: 40,
+                        offset: const Offset(0, 16))
                   ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('A&F Chat',
-                        style: TextStyle(fontSize: 28,
-                            fontWeight: FontWeight.w700, color: kAccent)),
+                        style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: kAccent)),
                     const SizedBox(height: 6),
                     Row(children: [
                       const Text('Bienvenido — ',
@@ -75,15 +115,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             MaterialPageRoute(
                                 builder: (_) => const RegisterScreen())),
                         child: const Text('¿No tienes cuenta?',
-                            style: TextStyle(color: kAccent,
-                                fontSize: 13, fontWeight: FontWeight.w600)),
+                            style: TextStyle(
+                                color: kAccent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
                       ),
                     ]),
                     const SizedBox(height: 28),
                     if (_error != null) ...[
-                      ErrorBox(_error!), const SizedBox(height: 14)
+                      ErrorBox(_error!),
+                      const SizedBox(height: 14)
                     ],
-                    LabeledField(label: 'CORREO ELECTRÓNICO',
+                    LabeledField(
+                        label: 'CORREO ELECTRÓNICO',
                         controller: _correoCtrl,
                         keyboardType: TextInputType.emailAddress,
                         hint: 'ejemplo@correo.com'),
@@ -94,9 +138,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       obscure: !_showPass,
                       hint: 'Contraseña',
                       suffix: IconButton(
-                        icon: Icon(_showPass
-                            ? Icons.visibility_off : Icons.visibility,
-                            color: kMuted, size: 20),
+                        icon: Icon(
+                            _showPass ? Icons.visibility_off : Icons.visibility,
+                            color: kMuted,
+                            size: 20),
                         onPressed: () => setState(() => _showPass = !_showPass),
                       ),
                     ),
@@ -104,7 +149,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ElevatedButton(
                       onPressed: _loading ? null : _doLogin,
                       child: _loading
-                          ? const SizedBox(width: 20, height: 20,
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
                               child: CircularProgressIndicator(
                                   color: Colors.white, strokeWidth: 2))
                           : const Text('Iniciar sesión'),

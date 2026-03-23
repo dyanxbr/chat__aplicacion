@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 
 class AuthService {
   static const _tokenKey = 'chat_token';
-  static const _userKey  = 'chat_user';
+  static const _userKey = 'chat_user';
 
   static Future<String?> getToken() async =>
       (await SharedPreferences.getInstance()).getString(_tokenKey);
@@ -35,7 +36,10 @@ class AuthService {
       {required String correo, required String password}) async {
     final res = await http.post(
       Uri.parse('$kApiBase/api/login'),
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: jsonEncode({'correo': correo, 'password': password}),
     );
     final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -58,7 +62,10 @@ class AuthService {
   }) async {
     final res = await http.post(
       Uri.parse('$kApiBase/api/register'),
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: jsonEncode({
         'nombre': nombre,
         'apellido_p': apellidoP,
@@ -90,5 +97,29 @@ class AuthService {
       } catch (_) {}
     }
     await clearSession();
+  }
+
+  // ── Actualizar Firebase token ──────────────────────────────────
+  static Future<void> updateFirebaseToken(String firebaseToken) async {
+    try {
+      final token = await getToken();
+      if (token == null) return;
+
+      final res = await http.post(
+        Uri.parse('$kApiBase/api/firebase-token'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'firebase_token': firebaseToken}),
+      );
+
+      if (res.statusCode != 200) {
+        debugPrint('FCM token upload failed: ${res.body}');
+      }
+    } catch (e) {
+      debugPrint('FCM token error: $e');
+    }
   }
 }

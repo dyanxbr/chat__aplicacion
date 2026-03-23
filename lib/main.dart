@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'theme.dart';
 import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/chat/chat_list_screen.dart';
 
-void main() {
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
   ));
+
   runApp(const AFChatApp());
 }
 
@@ -37,8 +47,10 @@ class _SplashRouter extends StatelessWidget {
               body: Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text('A&F Chat',
-                      style: TextStyle(fontSize: 32,
-                          fontWeight: FontWeight.w700, color: kAccent)),
+                      style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w700,
+                          color: kAccent)),
                   SizedBox(height: 24),
                   CircularProgressIndicator(color: kAccent),
                 ]),
