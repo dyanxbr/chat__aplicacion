@@ -30,7 +30,6 @@ class AuthService {
     await p.remove(_userKey);
   }
 
-  // ── Login ──────────────────────────────────────────────────────
   static Future<void> login(
       {required String correo, required String password}) async {
     final res = await http.post(
@@ -48,7 +47,6 @@ class AuthService {
     await _save(data['token'] as String, data['user'] as Map<String, dynamic>);
   }
 
-  // ── Registro ───────────────────────────────────────────────────
   static Future<String> register({
     required String nombre,
     required String apellidoP,
@@ -78,7 +76,6 @@ class AuthService {
     return correo;
   }
 
-  // ── Logout ─────────────────────────────────────────────────────
   static Future<void> logout() async {
     final token = await getToken();
     if (token != null) {

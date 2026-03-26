@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 import '../../theme.dart';
 import '../../widgets/common_widgets.dart';
+import '../../services/biometric_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -81,7 +82,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       request.fields['apellido_p'] = _apellidoPCtrl.text.trim();
       request.fields['apellido_m'] = _apellidoMCtrl.text.trim();
 
-      // Contraseña solo si fue ingresada
       if (_passCtrl.text.isNotEmpty) {
         request.fields['password']              = _passCtrl.text;
         request.fields['password_confirmation'] = _passConfCtrl.text;
@@ -103,7 +103,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             : (data['message'] ?? 'Error al actualizar perfil'));
       }
 
-      // Actualizar datos locales
       final currentUser = await AuthService.getUser() ?? {};
       currentUser['nombre']     = _nombreCtrl.text.trim();
       currentUser['apellido_p'] = _apellidoPCtrl.text.trim();
@@ -129,8 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _success  = 'Perfil actualizado correctamente.';
       });
     } catch (e) {
-      setState(
-          () => _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -168,7 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Foto de perfil ──────────────────────────────
+                  // ── Avatar ──
                   Center(
                     child: Stack(children: [
                       GestureDetector(
@@ -182,28 +180,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ? ClipOval(
                                     child: Image.network(
                                       storageUrl(fotoUrl),
-                                      width: 90,
-                                      height: 90,
+                                      width: 90, height: 90,
                                       fit: BoxFit.cover,
                                       loadingBuilder: (_, child, prog) {
                                         if (prog == null) return child;
                                         return LetterAvatar(
-                                            nombre: _user?['nombre']
-                                                    as String? ??
-                                                '',
+                                            nombre: _user?['nombre'] as String? ?? '',
                                             size: 90);
                                       },
                                       errorBuilder: (_, __, ___) =>
                                           LetterAvatar(
-                                              nombre: _user?['nombre']
-                                                      as String? ??
-                                                  '',
+                                              nombre: _user?['nombre'] as String? ?? '',
                                               size: 90),
                                     ),
                                   )
                                 : LetterAvatar(
-                                    nombre:
-                                        _user?['nombre'] as String? ?? '',
+                                    nombre: _user?['nombre'] as String? ?? '',
                                     size: 90),
                       ),
                       Positioned(
@@ -231,6 +223,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: kText),
                     ),
                   ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Botón biométrico ──
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const BiometricTestScreen()),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: kAccent.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color: kAccent.withValues(alpha: 0.35),
+                            width: 1.5),
+                      ),
+                      child: const Row(children: [
+                        Icon(Icons.fingerprint, color: kAccent, size: 28),
+                        SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Datos biométricos',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: kText)),
+                              SizedBox(height: 2),
+                              Text('Configura huella o reconocimiento facial',
+                                  style: TextStyle(
+                                      fontSize: 12, color: kMuted)),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, color: kMuted),
+                      ]),
+                    ),
+                  ),
+
                   const SizedBox(height: 24),
 
                   if (_error != null) ...[
@@ -270,11 +305,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     hint: '••••••••',
                     suffix: IconButton(
                       icon: Icon(
-                          _showPass
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: kMuted,
-                          size: 20),
+                          _showPass ? Icons.visibility_off : Icons.visibility,
+                          color: kMuted, size: 20),
                       onPressed: () =>
                           setState(() => _showPass = !_showPass),
                     ),
@@ -287,11 +319,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     hint: '••••••••',
                     suffix: IconButton(
                       icon: Icon(
-                          _showConf
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: kMuted,
-                          size: 20),
+                          _showConf ? Icons.visibility_off : Icons.visibility,
+                          color: kMuted, size: 20),
                       onPressed: () =>
                           setState(() => _showConf = !_showConf),
                     ),
@@ -302,8 +331,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: _loading ? null : _save,
                     child: _loading
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                            width: 20, height: 20,
                             child: CircularProgressIndicator(
                                 color: Colors.white, strokeWidth: 2))
                         : const Text('Guardar cambios'),

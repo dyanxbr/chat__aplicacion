@@ -1,20 +1,28 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Internet -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
-    <!-- Galería / Archivos (Android 13+) -->
+    <!-- Biométrico -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
+
+    <!-- Cámara -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- Galería Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
 
-    <!-- Archivos (Android 12 y menores) -->
+    <!-- Almacenamiento Android 12 y menores -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29"/>
 
-    <!-- Cámara (para image_picker) -->
-    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- tools:replace resuelve el conflicto con camera_android_camerax -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"
+        tools:replace="android:maxSdkVersion"/>
 
     <application
         android:label="A&amp;F Chat"
@@ -67,7 +75,6 @@
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE"/>
         </intent>
-        <!-- url_launcher: abrir archivos e imágenes en el navegador/apps -->
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
@@ -77,4 +84,5 @@
             <data android:scheme="http"/>
         </intent>
     </queries>
+
 </manifest>

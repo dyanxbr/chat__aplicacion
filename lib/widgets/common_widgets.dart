@@ -2,20 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 
-// ── Construye la URL correcta para archivos del storage de Laravel ─────────────
-// La API puede devolver el path de varias formas:
-//   "perfiles/foto.jpg"
-//   "storage/perfiles/foto.jpg"
-//   "chat/archivo.png"
-// Siempre resulta en: https://dominio/storage/perfiles/foto.jpg
 String storageUrl(String path) {
   if (path.startsWith('http')) return path;
-  // Quitar prefijo "storage/" si ya viene incluido
   final clean = path.startsWith('storage/') ? path.substring(8) : path;
   return '$kApiBase/storage/$clean';
 }
 
-// ── Widget de imagen de red con fallback robusto ──────────────────────────────
 class NetImage extends StatelessWidget {
   final String path;
   final double width;
@@ -58,7 +50,6 @@ class NetImage extends StatelessWidget {
         );
       },
       errorBuilder: (_, error, __) {
-        // Si falla, intentar con la URL alternativa (sin /storage/)
         final altUrl = '$kApiBase/$path';
         if (altUrl != url) {
           return Image.network(
@@ -84,7 +75,6 @@ class NetImage extends StatelessWidget {
       );
 }
 
-// ── Avatar letra ──────────────────────────────────────────────────────────────
 class LetterAvatar extends StatelessWidget {
   final String nombre;
   final double size;
@@ -108,7 +98,6 @@ class LetterAvatar extends StatelessWidget {
   }
 }
 
-// ── Avatar con foto de perfil real o letra ────────────────────────────────────
 class UserAvatar extends StatelessWidget {
   final Map<String, dynamic> user;
   final double size;
@@ -133,7 +122,6 @@ class UserAvatar extends StatelessWidget {
   }
 }
 
-// ── Campo con etiqueta ────────────────────────────────────────────────────────
 class LabeledField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
@@ -172,7 +160,6 @@ class LabeledField extends StatelessWidget {
   }
 }
 
-// ── Error box ─────────────────────────────────────────────────────────────────
 class ErrorBox extends StatelessWidget {
   final String message;
   const ErrorBox(this.message, {super.key});
@@ -190,7 +177,6 @@ class ErrorBox extends StatelessWidget {
       );
 }
 
-// ── Success box ───────────────────────────────────────────────────────────────
 class SuccessBox extends StatelessWidget {
   final String message;
   const SuccessBox(this.message, {super.key});
@@ -208,7 +194,6 @@ class SuccessBox extends StatelessWidget {
       );
 }
 
-// ── Burbuja de mensaje ────────────────────────────────────────────────────────
 class MessageBubble extends StatelessWidget {
   final Map<String, dynamic> msg;
   final bool isMine;
@@ -321,7 +306,6 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    // Archivo no imagen — botón para abrir
     final nombre = archivo.split('/').last;
     return GestureDetector(
       onTap: () => _openUrl(context, url),

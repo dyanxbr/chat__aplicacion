@@ -36,7 +36,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
     try {
       final all  = await ChatService.getUsuarios();
       final myId = _me?['id_usuario'];
-      // Filtrar mi propio usuario de la lista
       setState(() {
         _users = all.where((u) => u['id_usuario'] != myId).toList();
       });

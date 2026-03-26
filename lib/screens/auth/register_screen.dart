@@ -121,7 +121,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 12),
                     LabeledField(label: 'APELLIDO MATERNO', controller: _apellidoMCtrl, hint: 'Apellido materno'),
                     const SizedBox(height: 12),
-                    // Fecha de nacimiento
                     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       const Text('FECHA DE NACIMIENTO',
                           style: TextStyle(fontSize: 12,

@@ -10,7 +10,6 @@ class ChatService {
     return {'Accept': 'application/json', 'Authorization': 'Bearer $token'};
   }
 
-  // ── Usuarios ───────────────────────────────────────────────────
   static Future<List<Map<String, dynamic>>> getUsuarios() async {
     final res = await http.get(
         Uri.parse('$kApiBase/api/usuarios'), headers: await _headers());
@@ -20,7 +19,6 @@ class ChatService {
     return list.cast<Map<String, dynamic>>();
   }
 
-  // ── Conversación ───────────────────────────────────────────────
   static Future<List<Map<String, dynamic>>> getConversacion(int userId) async {
     final res = await http.get(
         Uri.parse('$kApiBase/api/chat/$userId'), headers: await _headers());
@@ -30,7 +28,6 @@ class ChatService {
     return list.cast<Map<String, dynamic>>();
   }
 
-  // ── Enviar texto ───────────────────────────────────────────────
   static Future<void> enviarMensaje(int userId, String mensaje) async {
     final token = await AuthService.getToken();
     final res = await http.post(
@@ -47,7 +44,6 @@ class ChatService {
     }
   }
 
-  // ── Enviar con archivo ─────────────────────────────────────────
   static Future<void> enviarConArchivo(
       int userId, String? mensaje, File archivo) async {
     final token = await AuthService.getToken();
@@ -66,7 +62,6 @@ class ChatService {
     }
   }
 
-  // ── Actualizar perfil ──────────────────────────────────────────
   static Future<void> actualizarPerfil({
     required String nombre,
     required String apellidoP,

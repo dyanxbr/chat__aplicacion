@@ -238,15 +238,12 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.fromLTRB(4, 8, 8, 12),
       child: SafeArea(top: false,
         child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          // Imagen
           IconButton(
             icon: const Icon(Icons.image_outlined, color: kChatMuted, size: 22),
             onPressed: _pickImage),
-          // Archivo
           IconButton(
             icon: const Icon(Icons.attach_file, color: kChatMuted, size: 22),
             onPressed: _pickFile),
-          // Texto
           Expanded(
             child: TextField(
               controller: _inputCtrl,
