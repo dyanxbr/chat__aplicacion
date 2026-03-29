@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../theme.dart';
 import '../../widgets/common_widgets.dart';
 import '../../services/biometric_service.dart';
+import 'face_register_screen.dart'; // ← NUEVA IMPORTACIÓN
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -27,10 +28,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   File? _newPhoto;
   Map<String, dynamic>? _user;
 
+  // Estado del registro facial
+  bool _faceRegistered = false;
+
   @override
   void initState() {
     super.initState();
     _loadUser();
+    _checkFaceRegistered();
+  }
+
+  Future<void> _checkFaceRegistered() async {
+    final registered = await BiometricService.isFaceRegistered();
+    if (mounted) setState(() => _faceRegistered = registered);
   }
 
   Future<void> _loadUser() async {
@@ -226,12 +236,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 20),
 
-                  // ── Botón biométrico ──
+                  // ── Botón huella dactilar ──
                   GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const BiometricTestScreen()),
-                    ),
+                    onTap: () async {
+                      bool ok = await BiometricService.authenticate();
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            ok
+                                ? 'Autenticación biométrica exitosa'
+                                : 'No se pudo autenticar',
+                          ),
+                        ),
+                      );
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
@@ -249,19 +268,113 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Datos biométricos',
+                              Text('Huella dactilar',
                                   style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: kText)),
                               SizedBox(height: 2),
-                              Text('Configura huella o reconocimiento facial',
+                              Text('Autenticar con huella del dispositivo',
                                   style: TextStyle(
                                       fontSize: 12, color: kMuted)),
                             ],
                           ),
                         ),
                         Icon(Icons.chevron_right, color: kMuted),
+                      ]),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── Botón facial (NUEVO) ──
+                  GestureDetector(
+                    onTap: () async {
+                      final result = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => const FaceRegisterScreen(),
+                        ),
+                      );
+                      // Si regresó con éxito, refrescar estado
+                      if (result == true) {
+                        await _checkFaceRegistered();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Rostro registrado correctamente'),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: _faceRegistered
+                            ? const Color(0xFF22C55E).withValues(alpha: 0.08)
+                            : kSurface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _faceRegistered
+                              ? const Color(0xFF22C55E).withValues(alpha: 0.5)
+                              : kBorder,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(children: [
+                        Icon(
+                          _faceRegistered
+                              ? Icons.face_retouching_natural
+                              : Icons.face_outlined,
+                          color: _faceRegistered
+                              ? const Color(0xFF22C55E)
+                              : kMuted,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Reconocimiento facial',
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: kText),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _faceRegistered
+                                    ? 'Rostro registrado — toca para actualizar'
+                                    : 'Registra tu rostro para login facial',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: _faceRegistered
+                                        ? const Color(0xFF22C55E)
+                                        : kMuted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_faceRegistered)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF22C55E)
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text('Activo',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF22C55E))),
+                          )
+                        else
+                          const Icon(Icons.chevron_right, color: kMuted),
                       ]),
                     ),
                   ),
