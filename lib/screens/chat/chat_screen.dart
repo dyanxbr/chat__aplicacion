@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../services/auth_service.dart';
@@ -16,32 +17,58 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final _inputCtrl  = TextEditingController();
+  final _inputCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   Timer? _poll;
-  bool _sending     = false;
+  bool _sending = false;
   File? _file;
   String? _fileName;
   int? _myId;
 
+  // Suscripción al stream de mensajes en foreground
+  StreamSubscription<RemoteMessage>? _fcmSub;
+
   @override
-  void initState() { super.initState(); _init(); }
+  void initState() {
+    super.initState();
+    _init();
+  }
 
   Future<void> _init() async {
     final u = await AuthService.getUser();
     _myId = u?['id_usuario'] as int?;
     await _fetch();
+
+    // Polling cada 3 segundos (lo mantenemos por compatibilidad)
     _poll = Timer.periodic(const Duration(seconds: 3), (_) => _fetch());
+
+    // ── Escucha notificaciones cuando la app está en primer plano ──
+    _fcmSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      // Solo recargamos si el mensaje es de esta conversación
+      final senderId = int.tryParse(message.data['sender_id'] ?? '');
+      final peerId = widget.peer['id_usuario'] as int?;
+
+      if (senderId != null && senderId == peerId) {
+        _fetch(); // recarga los mensajes inmediatamente
+      }
+    });
+    // ──────────────────────────────────────────────────────────────
   }
 
   @override
-  void dispose() { _poll?.cancel(); _inputCtrl.dispose(); _scrollCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _poll?.cancel();
+    _fcmSub?.cancel();
+    _inputCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _fetch() async {
     try {
-      final msgs = await ChatService.getConversacion(
-          widget.peer['id_usuario'] as int);
+      final msgs =
+          await ChatService.getConversacion(widget.peer['id_usuario'] as int);
       if (!mounted) return;
       final atBottom = _isAtBottom();
       setState(() => _messages = msgs);
@@ -64,31 +91,32 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // ── Selección imagen ──────────────────────────────────────────
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 85);
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
-    setState(() { _file = File(picked.path); _fileName = picked.name; });
+    setState(() {
+      _file = File(picked.path);
+      _fileName = picked.name;
+    });
   }
 
-  // ── Selección archivo ─────────────────────────────────────────
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-      allowMultiple: false,
-    );
+    final result = await FilePicker.platform
+        .pickFiles(type: FileType.any, allowMultiple: false);
     if (result == null || result.files.single.path == null) return;
     setState(() {
-      _file     = File(result.files.single.path!);
+      _file = File(result.files.single.path!);
       _fileName = result.files.single.name;
     });
   }
 
-  void _removeFile() => setState(() { _file = null; _fileName = null; });
+  void _removeFile() => setState(() {
+        _file = null;
+        _fileName = null;
+      });
 
-  // ── Enviar ────────────────────────────────────────────────────
   Future<void> _send() async {
     final text = _inputCtrl.text.trim();
     if ((text.isEmpty && _file == null) || _sending) return;
@@ -107,8 +135,8 @@ class _ChatScreenState extends State<ChatScreen> {
       await _fetch();
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Error al enviar')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Error al enviar')));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -118,20 +146,23 @@ class _ChatScreenState extends State<ChatScreen> {
   String _dateLabel(String? s) {
     if (s == null) return '';
     try {
-      final dt    = DateTime.parse(s).toLocal();
-      final now   = DateTime.now();
+      final dt = DateTime.parse(s).toLocal();
+      final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final d     = DateTime(dt.year, dt.month, dt.day);
+      final d = DateTime(dt.year, dt.month, dt.day);
       if (d == today) return 'Hoy';
       if (d == today.subtract(const Duration(days: 1))) return 'Ayer';
-      return '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}/${dt.year}';
-    } catch (_) { return ''; }
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    } catch (_) {
+      return '';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final peerName =
-        '${widget.peer['nombre'] ?? ''} ${widget.peer['apellido_p'] ?? ''}'.trim();
+        '${widget.peer['nombre'] ?? ''} ${widget.peer['apellido_p'] ?? ''}'
+            .trim();
 
     return Scaffold(
       backgroundColor: kChatBg,
@@ -150,8 +181,8 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(peerName,
-                style: const TextStyle(fontSize: 15,
-                    fontWeight: FontWeight.w600, color: kText)),
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600, color: kText)),
             const Text('Conectado',
                 style: TextStyle(fontSize: 11, color: kAccent)),
           ]),
@@ -184,13 +215,12 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
                 color: kBorder, borderRadius: BorderRadius.circular(12)),
-            child: Text(lbl,
-                style: const TextStyle(fontSize: 11, color: kMuted)),
+            child:
+                Text(lbl, style: const TextStyle(fontSize: 11, color: kMuted)),
           ),
         ));
       }
-      items.add(MessageBubble(
-          msg: msg, isMine: msg['id_emisor'] == _myId));
+      items.add(MessageBubble(msg: msg, isMine: msg['id_emisor'] == _myId));
     }
     return ListView(
         controller: _scrollCtrl,
@@ -199,8 +229,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildFilePreview() {
-    final ext  = _fileName?.split('.').last.toLowerCase() ?? '';
-    final isImg = ['jpg','jpeg','png','gif','webp'].contains(ext);
+    final ext = _fileName?.split('.').last.toLowerCase() ?? '';
+    final isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext);
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -213,8 +243,8 @@ class _ChatScreenState extends State<ChatScreen> {
         isImg
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(6),
-                child: Image.file(_file!, width: 44, height: 44,
-                    fit: BoxFit.cover))
+                child: Image.file(_file!,
+                    width: 44, height: 44, fit: BoxFit.cover))
             : const Icon(Icons.attach_file, color: kAccent, size: 20),
         const SizedBox(width: 10),
         Expanded(
@@ -236,26 +266,29 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       color: kSurface,
       padding: const EdgeInsets.fromLTRB(4, 8, 8, 12),
-      child: SafeArea(top: false,
+      child: SafeArea(
+        top: false,
         child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           IconButton(
-            icon: const Icon(Icons.image_outlined, color: kChatMuted, size: 22),
-            onPressed: _pickImage),
+              icon:
+                  const Icon(Icons.image_outlined, color: kChatMuted, size: 22),
+              onPressed: _pickImage),
           IconButton(
-            icon: const Icon(Icons.attach_file, color: kChatMuted, size: 22),
-            onPressed: _pickFile),
+              icon: const Icon(Icons.attach_file, color: kChatMuted, size: 22),
+              onPressed: _pickFile),
           Expanded(
             child: TextField(
               controller: _inputCtrl,
-              minLines: 1, maxLines: 4,
+              minLines: 1,
+              maxLines: 4,
               style: const TextStyle(color: kText, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Escribe un mensaje...',
                 hintStyle: const TextStyle(color: kChatMuted),
                 fillColor: kChatBg,
                 filled: true,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
                   borderSide: BorderSide(color: kBorder),
@@ -272,16 +305,18 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          // Enviar
           GestureDetector(
             onTap: _sending ? null : _send,
             child: Container(
-              width: 44, height: 44,
-              decoration: const BoxDecoration(
-                  color: kAccent, shape: BoxShape.circle),
+              width: 44,
+              height: 44,
+              decoration:
+                  const BoxDecoration(color: kAccent, shape: BoxShape.circle),
               alignment: Alignment.center,
               child: _sending
-                  ? const SizedBox(width: 18, height: 18,
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                   : const Icon(Icons.send, color: Colors.white, size: 20),
