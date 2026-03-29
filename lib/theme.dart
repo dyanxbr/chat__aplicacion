@@ -13,8 +13,8 @@ const kChatBg = Color(0xFFf4fbfb);
 const kSurface = Color(0xFFeef9f9);
 const kChatMuted = Color(0xFF6f9c9a);
 
-// const String kApiBase   = 'https://chat-production-af8e.up.railway.app';
-const String kApiBase = 'http://192.168.0.11:8000';
+const String kApiBase = 'https://chat-production-af8e.up.railway.app';
+//const String kApiBase = 'http://192.168.0.11:8000';
 const String kGeminiKey = 'AIzaSyCHcPkPOlLFP10zbJOJfbaPc0KBrUI5jKo';
 const String kGeminiUrl =
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$kGeminiKey';

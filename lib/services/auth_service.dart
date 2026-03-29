@@ -88,15 +88,23 @@ class AuthService {
   // ── Logout ─────────────────────────────────────────────────────
   static Future<void> logout() async {
     final token = await getToken();
+
     if (token != null) {
       try {
-        await http.post(Uri.parse('$kApiBase/api/logout'), headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-        });
+        await http.post(
+          Uri.parse('$kApiBase/api/logout'),
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
       } catch (_) {}
     }
-    await clearSession();
+
+    /// solo borrar sesión normal
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_tokenKey);
+    await p.remove(_userKey);
   }
 
   // ── Actualizar Firebase token ──────────────────────────────────
