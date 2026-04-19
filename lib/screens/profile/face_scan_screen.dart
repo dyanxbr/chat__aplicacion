@@ -69,8 +69,6 @@ class _FaceScanScreenState extends State<FaceScanScreen> {
     _camCtrl!.startImageStream(_procesarFrame);
   }
 
-  // ── Procesar frame ─────────────────────────────────────────
-
   Future<void> _procesarFrame(CameraImage image) async {
     if (_procesando || _exitoso) return;
     _procesando = true;

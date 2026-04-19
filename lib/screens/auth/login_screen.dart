@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
+import '../../services/face_embedding_service.dart';
 import '../../theme.dart';
 import '../../widgets/common_widgets.dart';
 import 'register_screen.dart';
 import '../chat/chat_list_screen.dart';
+import '../profile/face_login_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,11 +26,15 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _error;
   bool _showPass = false;
+  bool _hasFaceRegistered = false;
+  bool _isBiometricSupported = false;
+  String _availableBiometrics = '';
+  bool _isFaceValid = true;
 
   @override
   void initState() {
     super.initState();
-    _checkBiometricLogin();
+    _initializeLoginScreen();
   }
 
   @override
@@ -38,23 +44,82 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  /// Verifica si existe sesión biométrica y pide huella
+  Future<void> _initializeLoginScreen() async {
+    await _checkBiometricStatus();
+    await _checkBiometricLogin();
+    await _checkFaceRegistration();
+  }
+
+  Future<void> _checkBiometricStatus() async {
+    try {
+      final isSupported = await BiometricService.isBiometricSupported();
+      final availableTypes = await BiometricService.getAvailableBiometricsDescription();
+      final isFaceValid = await BiometricService.isFaceRegistrationValid();
+      
+      if (mounted) {
+        setState(() {
+          _isBiometricSupported = isSupported;
+          _availableBiometrics = availableTypes;
+          _isFaceValid = isFaceValid;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error verificando estado biométrico: $e');
+    }
+  }
+
+  Future<void> _checkFaceRegistration() async {
+    try {
+      final hasFace = await BiometricService.hasFaceRegistered();
+      final isFaceValid = await BiometricService.isFaceRegistrationValid();
+      
+      if (mounted) {
+        setState(() {
+          _hasFaceRegistered = hasFace && isFaceValid;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error verificando registro facial: $e');
+    }
+  }
+
   Future<void> _checkBiometricLogin() async {
-    String? bioToken = await storage.read(key: "biometric_token");
+    try {
+      String? bioToken = await storage.read(key: "biometric_token");
 
-    if (bioToken != null) {
-      bool ok = await BiometricService.authenticate();
+      if (bioToken != null) {
+        if (!_isBiometricSupported) {
+          await storage.delete(key: "biometric_token");
+          return;
+        }
 
-      if (!ok) return;
+        bool ok = await BiometricService.authenticate(
+          reason: "Inicia sesión automáticamente con tu biometría"
+        );
 
-      /// Restaurar sesión
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("chat_token", bioToken);
+        if (!ok) return;
 
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ChatListScreen()),
-      );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString("chat_token", bioToken);
+
+        if (!mounted) return;
+        
+        final isValid = await AuthService.validateToken();
+        if (!isValid) {
+          await storage.delete(key: "biometric_token");
+          setState(() => _error = "Sesión expirada. Inicia sesión nuevamente.");
+          return;
+        }
+        
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const ChatListScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error en checkBiometricLogin: $e');
+      await storage.delete(key: "biometric_token");
     }
   }
 
@@ -75,71 +140,132 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passCtrl.text,
       );
 
-      /// Guardar token biométrico
       final token = await AuthService.getToken();
-      if (token != null) {
+      if (token != null && _isBiometricSupported) {
         await storage.write(key: "biometric_token", value: token);
       }
 
-      /// Subir token FCM
+      await _syncFaceDataAfterLogin();
       await _uploadFcmToken();
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ChatListScreen()),
-      );
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const ChatListScreen()),
+        );
+      }
     } catch (e) {
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  /// Subir token FCM al backend
+  Future<void> _syncFaceDataAfterLogin() async {
+    try {
+      final hasServer = await FaceEmbeddingService.hasServerRegistration();
+      final hasLocal = await FaceEmbeddingService.loadLocalCache() != null;
+
+      if (hasServer && !hasLocal) {
+        await FaceEmbeddingService.syncFromServer();
+        await BiometricService.setFaceRegistered(true);
+        if (mounted) {
+          setState(() => _hasFaceRegistered = true);
+        }
+      }
+      
+      final isFaceValid = await BiometricService.isFaceRegistrationValid();
+      if (await BiometricService.hasFaceRegistered() && !isFaceValid && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tu registro facial ha expirado. Por favor, registra tu rostro nuevamente.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error sincronizando datos faciales: $e');
+    }
+  }
+
   Future<void> _uploadFcmToken() async {
     try {
       final messaging = FirebaseMessaging.instance;
-
       await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
-
       final token = await messaging.getToken();
       if (token == null) return;
-
       await AuthService.updateFirebaseToken(token);
-
       messaging.onTokenRefresh.listen((newToken) {
         AuthService.updateFirebaseToken(newToken);
       });
-    } catch (_) {
-      // ignoramos errores
-    }
+    } catch (_) {}
   }
 
-  /// Login usando biometría manual
   Future<void> _loginBiometrico() async {
-    print("Intentando biometría");
+    if (!_isBiometricSupported) {
+      setState(() => _error = "Tu dispositivo no soporta biometría o no está configurada.");
+      return;
+    }
 
-    bool ok = await BiometricService.authenticate();
-    print("Resultado biometría: $ok");
+    bool ok = await BiometricService.authenticate(
+      reason: "Verifica tu identidad para iniciar sesión"
+    );
 
     if (!ok) return;
 
     String? bioToken = await storage.read(key: "biometric_token");
 
     if (bioToken != null) {
+      final isValid = await AuthService.validateToken();
+      if (!isValid) {
+        await storage.delete(key: "biometric_token");
+        setState(() => _error = "Sesión expirada. Inicia sesión con tu contraseña.");
+        return;
+      }
+      
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString("chat_token", bioToken);
 
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ChatListScreen()),
-      );
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const ChatListScreen()),
+        );
+      }
     } else {
-      setState(() => _error = "Primero inicia sesión normalmente");
+      setState(() => _error = "Primero inicia sesión normalmente para guardar tus datos biométricos");
+    }
+  }
+
+  Future<void> _loginFacial() async {
+    if (!_hasFaceRegistered) {
+      setState(() => _error = "No tienes rostro registrado o tu registro ha expirado.");
+      return;
+    }
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const FaceLoginScreen()),
+    );
+
+    if (result == true && mounted) {
+      final token = await AuthService.getToken();
+      if (token != null && _isBiometricSupported) {
+        await storage.write(key: "biometric_token", value: token);
+      }
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const ChatListScreen()),
+        );
+      }
+    } else if (result == false && mounted) {
+      setState(() => _error = "No se pudo verificar tu rostro. Intenta de nuevo.");
     }
   }
 
@@ -201,6 +327,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
+                    if (_isBiometricSupported && _availableBiometrics.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: kAccent.withAlpha(25),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 28),
                     if (_error != null) ...[
                       ErrorBox(_error!),
@@ -241,26 +377,44 @@ class _LoginScreenState extends State<LoginScreen> {
                             )
                           : const Text('Iniciar sesión'),
                     ),
-                    const SizedBox(height: 20),
-                    Center(
-                      child: Column(
-                        children: [
-                          const Text(
-                            "Entrar con biometría",
-                            style: TextStyle(color: kMuted),
-                          ),
-                          const SizedBox(height: 10),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.fingerprint,
-                              size: 40,
-                              color: kAccent,
-                            ),
-                            onPressed: _loginBiometrico,
-                          ),
-                        ],
-                      ),
+                    const SizedBox(height: 24),
+                    const Divider(color: kBorder),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Acceso rápido",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: kMuted, fontSize: 13),
                     ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildBiometricButton(
+                          icon: Icons.fingerprint,
+                          label: 'Huella',
+                          onPressed: _loginBiometrico,
+                          enabled: _isBiometricSupported,
+                        ),
+                        const SizedBox(width: 24),
+                        _buildBiometricButton(
+                          icon: Icons.face_retouching_natural,
+                          label: 'Rostro',
+                          onPressed: _loginFacial,
+                          enabled: _hasFaceRegistered,
+                        ),
+                      ],
+                    ),
+                    if (!_hasFaceRegistered) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'No tienes rostro registrado. Ve a tu perfil para registrar tu rostro.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: kMuted.withAlpha(179),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -268,6 +422,40 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBiometricButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    bool enabled = true,
+  }) {
+    return Column(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: enabled ? kAccent.withAlpha(25) : kMuted.withAlpha(25),
+          ),
+          child: IconButton(
+            icon: Icon(
+              icon,
+              size: 32,
+              color: enabled ? kAccent : kMuted,
+            ),
+            onPressed: enabled ? onPressed : null,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: enabled ? kText : kMuted,
+          ),
+        ),
+      ],
     );
   }
 }
